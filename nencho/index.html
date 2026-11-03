@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>年末調整の家族チェッカー</title>
+<style>
+:root {
+  --bg: #f7f6f2; --card: #ffffff; --ink: #1f2328; --sub: #5d646d; --line: #e3e1da; --accent: #2557c7;
+  --ok: #1a7f4b; --ok-bg: #e6f4ec; --warn: #9a6200; --warn-bg: #fdf1dc; --bad: #b42318; --bad-bg: #fde8e6;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #15171a; --card: #1e2125; --ink: #e8e6e1; --sub: #a0a6ad; --line: #33373c; --accent: #7ea6ff; --ok: #5cc98d; --ok-bg: #173325; --warn: #f0b44c; --warn-bg: #3a2c12; --bad: #ff7b6e; --bad-bg: #3d1a17; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.7 "Segoe UI", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: 27px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 0 0 8px; }
+h3 { font-size: 16px; margin: 0 0 4px; }
+.lead { color: var(--sub); margin: 0 0 16px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+.panel > * { min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 8px 0; font-size: 15px; }
+.row label { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+input[type=text], input[type=date], select { font: inherit; font-size: 16px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); max-width: 100%; }
+input.num { width: 6.5em; text-align: right; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 6px 14px; border-radius: 10px; cursor: pointer; }
+.member { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 10px 0; }
+.member .del { float: right; font-size: 13px; padding: 2px 10px; }
+.res { margin-top: 6px; }
+.item { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 4px 0; border-top: 1px dashed var(--line); }
+.item > * { min-width: 0; }
+.item .amt { font-weight: 700; font-variant-numeric: tabular-nums; }
+.item .where { grid-column: 1 / -1; color: var(--sub); font-size: 13px; }
+.note { border-radius: 10px; padding: 6px 10px; font-size: 14px; margin: 6px 0; }
+.note.ok { background: var(--ok-bg); color: var(--ok); }
+.note.warn { background: var(--warn-bg); color: var(--warn); }
+.note.bad { background: var(--bad-bg); color: var(--bad); }
+.small { color: var(--sub); font-size: 13px; }
+ol li { margin: 4px 0; }
+footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
+#selftest { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>年末調整の家族チェッカー</h1>
+  <p class="lead"><b>令和8年分（2026年）</b>の年末調整で、家族ごとに「どの控除を・いくら・どの申告書のどの欄に書くか」を出します。今年は扶養の基準が <b>年収123万→136万円</b> に変わり、新たに対象になる家族がいる人は申告書の出し直しが要ります。ネットにはつながず、入れた生年月日や金額は外に送りません（ブラウザにも残しません）。</p>
+
+  <section class="panel">
+    <h2>1. あなた（本人）</h2>
+    <div class="row"><label>今年の給与（年収の見込み）<input type="text" class="num" id="selfGross" inputmode="numeric" value="500"> 万円</label></div>
+    <div class="row">
+      <label><input type="checkbox" id="single"> ひとり親（結婚していない・生計を一にする子がいる）</label>
+      <label><input type="checkbox" id="widow"> 寡婦</label>
+      <label><input type="checkbox" id="student"> 勤労学生</label>
+      <label>障害 <select id="selfDis"><option value="none">なし</option><option value="normal">障害者</option><option value="special">特別障害者</option></select></label>
+    </div>
+    <div id="selfOut" class="res"></div>
+  </section>
+
+  <section class="panel">
+    <h2>2. 家族</h2>
+    <p class="small">収入は給与だけのときの年収（万円）です。給与以外の収入があるときは「所得で入れる」を選び、合計所得の見積額を入れてください。</p>
+    <div id="members"></div>
+    <button id="add">＋ 家族を足す</button>
+  </section>
+
+  <section class="panel">
+    <h2>3. 会社に出すもの</h2>
+    <div id="forms"></div>
+  </section>
+
+  <footer>出典: 国税庁「令和8年分 年末調整のしかた」・扶養控除等（異動）申告書の記載例、令和8年度税制改正 Q&A（令和8年5月）、タックスアンサー No.1160（障害者控除）・No.1170（寡婦）・No.1171（ひとり親）・No.1175（勤労学生）・No.1177（特定親族特別控除）・No.1180（扶養控除）・No.1191（配偶者控除）・No.1195（配偶者特別控除）・No.1199（基礎控除）・No.1410（給与所得控除）。<br>
+  前提と注意: 年齢は2026年12月31日現在。給与所得は式で出しています（年収660万円未満は本来、国税庁の「給与所得控除後の給与等の金額の表」で求めるため、境目ではわずかにずれることがあります）。同じ家族を夫婦の両方の控除に入れることはできません。最後の給与を11月30日以前に払う年末調整（年の途中で退職した人など）では今年の改正は反映されないので、改正後の控除を受けるには確定申告をします（源泉徴収された税額が無ければ、確定申告をしても戻る税金はありません。令和8年度改正 Q&A Q1-3・Q7-1）。迷ったら会社の担当者か税務署へ。</footer>
+  <pre id="selftest"></pre>
+</main>
+<script>
+// 令和8年分の年末調整: 家族ごとに、どの控除を・いくら・どの申告書のどの欄に書くか。
+// 出典は保管庫 00_Inbox「年末調整 令和8年分 原典まとめ 2026-10-22」（国税庁「令和8年分 年末調整のしかた」105/106.pdf、
+// 記載例 305.pdf、タックスアンサー No.1160/1170/1171/1175/1177/1180/1191/1195/1199/1410、令和8年度改正 Q&A、e-Gov 所得税法 令和8年12月1日施行版）。
+(function (root) {
+  "use strict";
+  var MAN = 10000;
+
+  // 令和8年分の給与所得控除（No.1410。220万円まで 74万円、220万超360万以下 30%＋8万円、
+  // 360万超660万以下 20%＋44万円、660万超850万以下 10%＋110万円、850万超 195万円）。
+  // 660万円未満は本来「年末調整等のための給与所得控除後の給与等の金額の表」で求める（No.1410 注3）が、ここでは式で近似する
+  function salaryIncome(g) {
+    if (!(g > 0)) return 0;
+    var d;
+    if (g <= 220 * MAN) d = Math.min(g, 74 * MAN);
+    else if (g <= 360 * MAN) d = g * 0.3 + 8 * MAN;
+    else if (g <= 660 * MAN) d = g * 0.2 + 44 * MAN;
+    else if (g <= 850 * MAN) d = g * 0.1 + 110 * MAN;
+    else d = 195 * MAN;
+    return Math.max(0, Math.floor(g - d));
+  }
+
+  // 改正前（令和7年分）の給与所得。最低保障額 65万円（収入190万円まで。No.1410）。
+  // 「今年の改正で新たに対象になる人」を、改正前の式で 58万円超だったかで決めるのに使う
+  function salaryIncomeR7(g) {
+    if (!(g > 0)) return 0;
+    if (g <= 190 * MAN) return Math.max(0, g - Math.min(g, 65 * MAN));
+    return g <= 220 * MAN ? Math.floor(g - (g * 0.3 + 8 * MAN)) : salaryIncome(g);
+  }
+  // m.gross（給与だけの年収）があれば改正前の式、なければ所得そのもので、改正前は対象外だったか
+  function wasOutBefore(m, inc) {
+    var before = m.gross != null ? salaryIncomeR7(m.gross) : inc;
+    return before > 58 * MAN;
+  }
+
+  // 生年月日の境（国税庁「令和8年分 年末調整のしかた」の書き方そのまま。年齢は12月31日現在）
+  var B = {
+    age16: "2011-01-01",      // 平成23年1月1日以前生 = 16歳以上
+    tokuteiFrom: "2004-01-02", // 平成16年1月2日から
+    tokuteiTo: "2008-01-01",   // 平成20年1月1日まで = 19歳以上23歳未満
+    age70: "1957-01-01"        // 昭和32年1月1日以前生 = 70歳以上
+  };
+  function ageClass(birth) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birth || "")) return null;
+    if (birth > B.age16) return "u16";
+    if (birth >= B.tokuteiFrom && birth <= B.tokuteiTo) return "1922";
+    if (birth <= B.age70) return "70";
+    return "general";
+  }
+
+  // 基礎控除（令和8年分、No.1199）
+  function basic(incomeSelf) {
+    var m = incomeSelf / MAN;
+    if (m <= 489) return 104; if (m <= 655) return 67; if (m <= 2350) return 62;
+    if (m <= 2400) return 48; if (m <= 2450) return 32; if (m <= 2500) return 16; return 0;
+  }
+
+  // 本人の所得の区分（配偶者控除等の区分Ⅰ）: A 900万以下 / B 900万超950万以下 / C 950万超1,000万以下 / null 1,000万超
+  function selfTier(incomeSelf) {
+    var m = incomeSelf / MAN;
+    if (m <= 900) return "A"; if (m <= 950) return "B"; if (m <= 1000) return "C"; return null;
+  }
+  var SPOUSE = { A: [38, 48], B: [26, 32], C: [13, 16] }; // [一般, 老人]（No.1191）
+  // 配偶者特別控除（No.1195 令和8年分以降）。[配偶者の所得の上限（以下）, A, B, C]
+  var SPOUSE_SP = [[95, 38, 26, 13], [100, 36, 24, 12], [105, 31, 21, 11], [110, 26, 18, 9], [115, 21, 14, 7], [120, 16, 11, 6], [125, 11, 8, 4], [130, 6, 4, 2], [133, 3, 2, 1]];
+  // 特定親族特別控除（No.1177）。[所得の上限（以下）, 額]
+  var TOKUTEI = [[85, 63], [90, 61], [95, 51], [100, 41], [105, 31], [110, 21], [115, 11], [120, 6], [123, 3]];
+  var DISAB = { none: 0, normal: 27, special: 40, specialLiving: 75 }; // No.1160
+
+  var F1 = "給与所得者の扶養控除等（異動）申告書";
+  var F2 = "給与所得者の基礎控除申告書 兼 給与所得者の配偶者控除等申告書 兼 給与所得者の特定親族特別控除申告書 兼 所得金額調整控除申告書";
+
+  // 家族1人を判定する。m: { rel: "spouse"|"child"|"parent"|"other", birth, income（合計所得の見積額・円）, livingTogether（同居）, disability: none|normal|special }
+  // self: { income（本人の合計所得）}
+  function judge(m, self) {
+    var cls = ageClass(m.birth);
+    var inc = m.income || 0, im = inc / MAN;
+    var out = { rel: m.rel, ageClass: cls, items: [], notes: [] };
+    if (!cls) { out.error = "生年月日が読めません"; return out; }
+    var tier = selfTier(self.income);
+
+    if (m.rel === "spouse") {
+      if (!tier) { out.notes.push("本人の合計所得が1,000万円を超えるので、配偶者控除・配偶者特別控除は受けられません（No.1191・No.1195）"); }
+      else if (im <= 62) {
+        var old = cls === "70";
+        out.items.push({ name: old ? "配偶者控除（老人控除対象配偶者）" : "配偶者控除", amount: SPOUSE[tier][old ? 1 : 0], form: F2, field: "配偶者控除等申告書の欄（区分Ⅰ＝" + tier + "、区分Ⅱ＝配偶者控除）" });
+      } else if (im <= 133) {
+        var row = SPOUSE_SP.filter(function (r) { return im <= r[0]; })[0];
+        out.items.push({ name: "配偶者特別控除", amount: row[{ A: 1, B: 2, C: 3 }[tier]], form: F2, field: "配偶者控除等申告書の欄（区分Ⅰ＝" + tier + "、区分Ⅱ＝配偶者特別控除）" });
+      } else out.notes.push("配偶者の合計所得が133万円を超えるので、配偶者特別控除は受けられません");
+      if (tier === "A" && im <= 95) out.notes.push(F1 + "の「源泉控除対象配偶者」欄にも書きます（本人900万円以下・配偶者95万円以下）");
+      out.notes.push("配偶者控除・配偶者特別控除は、" + F1 + "に書いたかどうかにかかわらず、" + F2 + "の提出が必要です");
+      // 同一生計配偶者（所得62万円以下）の障害者控除
+      if (m.disability && m.disability !== "none") {
+        if (im <= 62) out.items.push({ name: disabName(m), amount: disabAmount(m), form: F1, field: "「障害者、寡婦、ひとり親又は勤労学生」欄（同一生計配偶者）" });
+        else out.notes.push("配偶者の合計所得が62万円を超えるので、配偶者の障害者控除は受けられません");
+      }
+      if (im <= 62 && wasOutBefore(m, inc)) out.notes.push("今年の改正（所得要件 58万→62万円、給与所得控除の最低額 65万→74万円）で配偶者控除の対象になります。" + F2 + "で申告します");
+      return out;
+    }
+
+    // 子・親・その他の親族
+    if (im <= 62) {
+      if (cls === "u16") {
+        out.items.push({ name: "扶養控除なし（16歳未満）", amount: 0, form: F1, field: "「住民税に関する事項」の16歳未満の扶養親族の欄" });
+      } else {
+        var name = "扶養控除（一般）", amt = 38;
+        if (cls === "1922") { name = "扶養控除（特定扶養親族）"; amt = 63; }
+        if (cls === "70") {
+          var dousei = m.livingTogether && m.rel === "parent";
+          name = dousei ? "扶養控除（老人扶養親族・同居老親等）" : "扶養控除（老人扶養親族）"; amt = dousei ? 58 : 48;
+        }
+        out.items.push({ name: name, amount: amt, form: F1, field: "「源泉控除対象親族」の欄（B）" + (cls === "1922" ? "で「特定扶養親族」に印" : cls === "70" ? "の「老人扶養親族」の列で、" + (m.livingTogether && m.rel === "parent" ? "「同居老親等」" : "「その他」") + "に印" : "") });
+        if (cls === "70" && m.rel !== "parent") out.notes.push("同居老親等（58万円）は、本人か配偶者の親・祖父母など（直系尊属）で同居している人だけです");
+      }
+      if (m.disability && m.disability !== "none") out.items.push({ name: disabName(m), amount: disabAmount(m), form: F1, field: "「障害者、寡婦、ひとり親又は勤労学生」欄（扶養親族）" + (cls === "u16" ? "。16歳未満でも受けられます" : "") });
+      if (cls !== "u16" && wasOutBefore(m, inc)) out.notes.push("今年の改正（所得要件 58万→62万円、給与所得控除の最低額 65万→74万円）で新たに扶養控除の対象になります" + (cls === "1922" ? "（去年までの特定親族から、特定扶養親族に変わります。Q&A Q2-4）" : "") + "。" + F1 + "の「異動月日及び事由」欄に「令和8年12月1日 改正」と書いて出します（令和8年度改正 Q&A Q2-1）");
+    } else if (cls === "1922" && im <= 123) {
+      var t = TOKUTEI.filter(function (r) { return im <= r[0]; })[0];
+      out.items.push({ name: "特定親族特別控除", amount: t[1], form: F2, field: "特定親族特別控除申告書の欄" });
+      if (im <= 100) out.notes.push(F1 + "の「源泉控除対象親族」の欄（B）にも「特定親族」として書きます（所得100万円以下のとき）");
+      if (m.disability && m.disability !== "none") out.notes.push("特定親族は扶養親族に当たらないので、障害者控除は受けられません（年末調整のしかた）");
+    } else {
+      out.notes.push("合計所得が " + (cls === "1922" ? "123万円" : "62万円") + " を超えるので、扶養の控除は受けられません");
+      if (m.disability && m.disability !== "none") out.notes.push("扶養親族でないので、障害者控除も受けられません");
+    }
+    return out;
+  }
+
+  function disabName(m) { return m.disability === "special" ? (m.livingTogether ? "障害者控除（同居特別障害者）" : "障害者控除（特別障害者）") : "障害者控除（障害者）"; }
+  function disabAmount(m) { return m.disability === "special" ? (m.livingTogether ? DISAB.specialLiving : DISAB.special) : DISAB.normal; }
+
+  // 本人の控除（寡婦・ひとり親・勤労学生・障害者）。s: { income, widow, single, student, disability, studentOtherIncome }
+  function judgeSelf(s) {
+    var items = [], notes = [];
+    items.push({ name: "基礎控除", amount: basic(s.income), form: F2, field: "基礎控除申告書の欄" });
+    if (s.single) {
+      if (s.income <= 500 * MAN) items.push({ name: "ひとり親控除", amount: 35, form: F1, field: "「障害者、寡婦、ひとり親又は勤労学生」欄（本人）" });
+      else notes.push("合計所得が500万円を超えるので、ひとり親控除は受けられません");
+      notes.push("ひとり親控除は令和9年分から38万円になります（今年の年末調整は35万円）");
+    } else if (s.widow) {
+      if (s.income <= 500 * MAN) items.push({ name: "寡婦控除", amount: 27, form: F1, field: "「障害者、寡婦、ひとり親又は勤労学生」欄（本人）" });
+      else notes.push("合計所得が500万円を超えるので、寡婦控除は受けられません");
+    }
+    if (s.student) {
+      if (s.income <= 89 * MAN) items.push({ name: "勤労学生控除", amount: 27, form: F1, field: "「障害者、寡婦、ひとり親又は勤労学生」欄（本人）。専修学校などは証明書が要ります" });
+      else notes.push("合計所得が89万円（給与だけなら年収163万円）を超えるので、勤労学生控除は受けられません");
+    }
+    if (s.disability && s.disability !== "none") items.push({ name: s.disability === "special" ? "障害者控除（特別障害者）" : "障害者控除（障害者）", amount: s.disability === "special" ? 40 : 27, form: F1, field: "「障害者、寡婦、ひとり親又は勤労学生」欄（本人）" });
+    return { items: items, notes: notes };
+  }
+
+  var api = { MAN: MAN, salaryIncome: salaryIncome, salaryIncomeR7: salaryIncomeR7, ageClass: ageClass, basic: basic, selfTier: selfTier, judge: judge, judgeSelf: judgeSelf, F1: F1, F2: F2, BOUNDS: B };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.Nencho = api;
+})(this);
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var N = window.Nencho, M = N.MAN;
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  // 「500」「500万」は万円、「5000000」「5,000,000円」のように 1万以上の数は円として読む。読めなければ null
+  var man = function (s) {
+    s = String(s == null ? "" : s).normalize("NFKC").replace(/[,\s円]/g, "");
+    var m = s.match(/^(\d+(?:\.\d+)?)(万)?$/);
+    if (!m) return null;
+    var v = parseFloat(m[1]);
+    return !m[2] && v >= 10000 ? Math.floor(v) : Math.round(v * M);
+  };
+  var REL = [["spouse", "配偶者"], ["child", "子"], ["parent", "父母・祖父母"], ["other", "その他の親族"]];
+  var members = [{ rel: "spouse", birth: "1985-04-01", amount: "100", mode: "gross" }, { rel: "child", birth: "2006-07-01", amount: "150", mode: "gross" }];
+
+  function opts(list, sel) { return list.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === sel ? " selected" : "") + ">" + x[1] + "</option>"; }).join(""); }
+
+  function renderMembers() {
+    $("members").innerHTML = members.map(function (m, i) {
+      return '<div class="member" data-i="' + i + '"><button class="del">消す</button>' +
+        '<div class="row"><label>続柄 <select data-k="rel">' + opts(REL, m.rel) + '</select></label>' +
+        '<label>生年月日 <input type="date" data-k="birth" value="' + esc(m.birth || "") + '"></label></div>' +
+        '<div class="row"><label><select data-k="mode">' + opts([["gross", "年収（給与だけ）"], ["income", "所得で入れる"]], m.mode) + '</select> <input type="text" class="num" data-k="amount" inputmode="decimal" value="' + esc(m.amount || "") + '" placeholder="0"> 万円</label>' +
+        '<label><input type="checkbox" data-k="living"' + (m.living ? " checked" : "") + "> 同居</label>" +
+        '<label>障害 <select data-k="dis">' + opts([["none", "なし"], ["normal", "障害者"], ["special", "特別障害者"]], m.dis || "none") + "</select></label></div>" +
+        '<div class="res"></div></div>';
+    }).join("");
+    $("members").querySelectorAll(".member").forEach(function (el) {
+      var i = +el.dataset.i;
+      el.querySelectorAll("[data-k]").forEach(function (inp) {
+        inp.addEventListener(inp.type === "text" ? "input" : "change", function () { members[i][inp.dataset.k] = inp.type === "checkbox" ? inp.checked : inp.value; run(); });
+      });
+      el.querySelector(".del").onclick = function () { members.splice(i, 1); renderMembers(); };
+    });
+    run();
+  }
+
+  function itemsHtml(r) {
+    return r.items.map(function (it) {
+      return '<div class="item"><span>' + esc(it.name) + '</span><span class="amt">' + (it.amount ? it.amount + "万円" : "0円") + '</span><span class="where">書く所: ' + esc(it.form) + " ／ " + esc(it.field) + "</span></div>";
+    }).join("") + r.notes.map(function (n) { return '<div class="note ' + (/改正/.test(n) ? "warn" : "ok") + '">' + esc(n) + "</div>"; }).join("");
+  }
+
+  var last = null;
+  function run() {
+    var g = man($("selfGross").value);
+    if (g == null) { $("selfOut").innerHTML = '<div class="note bad">年収が読めません（万円で入れてください）。</div>'; return null; }
+    var selfInc = N.salaryIncome(g);
+    var s = N.judgeSelf({ income: selfInc, single: $("single").checked, widow: $("widow").checked && !$("single").checked, student: $("student").checked, disability: $("selfDis").value });
+    $("selfOut").innerHTML = '<p class="small">あなたの給与所得（目安）: ' + Math.round(selfInc / M).toLocaleString("ja-JP") + "万円</p>" + itemsHtml(s);
+    var results = [];
+    $("members").querySelectorAll(".member").forEach(function (el, i) {
+      var m = members[i], blank = String(m.amount || "").trim() === "", a = blank ? 0 : man(m.amount);
+      if (a == null) { el.querySelector(".res").innerHTML = '<div class="note bad">金額が読めません（万円で「100」、円で「1000000」）。この家族は判定しません。</div>'; results.push({ items: [], notes: [], error: "amount" }); return; }
+      var inc = m.mode === "income" ? a : N.salaryIncome(a);
+      var r = N.judge({ rel: m.rel, birth: m.birth, income: inc, gross: m.mode === "income" ? null : a, livingTogether: !!m.living, disability: m.dis || "none" }, { income: selfInc });
+      results.push(r);
+      el.querySelector(".res").innerHTML = r.error ? '<div class="note bad">' + esc(r.error) + "</div>" : '<p class="small">合計所得（目安）: ' + Math.round(inc / M).toLocaleString("ja-JP") + "万円</p>" + (r.items.length ? "" : '<div class="note warn">この家族の控除はありません。</div>') + itemsHtml(r);
+    });
+    // 会社に出すもの
+    var all = s.items.concat.apply(s.items, results.map(function (r) { return r.items || []; }));
+    var need2 = all.filter(function (it) { return it.form === N.F2; }).map(function (it) { return it.name.replace(/（.*$/, ""); });
+    var uniq = need2.filter(function (x, k) { return need2.indexOf(x) === k; });
+    var kaisei = results.some(function (r) { return (r.notes || []).some(function (n) { return /令和8年12月1日 改正/.test(n); }); });
+    $("forms").innerHTML = "<ol><li><b>" + esc(N.F1) + "</b>（年末調整を受ける人は全員）" + (kaisei ? '<div class="note warn">今年の改正で新たに対象になる家族がいます。「異動月日及び事由」欄に「令和8年12月1日 改正」と書いて、出し直してください。</div>' : "") + "</li>" +
+      "<li><b>" + esc(N.F2) + "</b>（" + esc(uniq.join("・")) + " のために書く）</li>" +
+      "<li>保険料控除申告書・住宅借入金等特別控除申告書は、生命保険・地震保険・住宅ローンがある人だけ（この道具では見ていません）</li></ol>" +
+      '<p class="small">控除の合計（目安）: ' + all.reduce(function (t, it) { return t + it.amount; }, 0) + "万円（所得から引く額。税額ではありません）</p>";
+    last = { self: s, members: results };
+    return last;
+  }
+
+  $("add").onclick = function () { members.push({ rel: "child", birth: "", amount: "", mode: "gross" }); renderMembers(); };
+  ["selfGross"].forEach(function (id) { $(id).oninput = run; });
+  ["single", "widow", "student", "selfDis"].forEach(function (id) { $(id).onchange = run; });
+  renderMembers();
+
+  if (location.hash === "#selftest") {
+    var log = [], fail = 0;
+    var check = function (ok, msg) { if (!ok) fail++; log.push((ok ? "PASS " : "FAIL ") + msg); };
+    var r = run();
+    check(r.members[0].items[0].name === "配偶者控除" && r.members[0].items[0].amount === 38, "spouse 100万 -> 配偶者控除 38");
+    check(r.members[1].items[0].name === "特定親族特別控除" && r.members[1].items[0].amount === 63, "child 19-22, 150万 -> 特定親族 63");
+    check($("forms").textContent.indexOf("配偶者控除・特定親族特別控除") >= 0 || $("forms").textContent.indexOf("基礎控除・配偶者控除・特定親族特別控除") >= 0, "form 2 lists reasons");
+    members = [{ rel: "child", birth: "2009-05-01", amount: "60", mode: "income" }, { rel: "child", birth: "2015-05-01", amount: "0", mode: "gross", dis: "special", living: true }, { rel: "parent", birth: "1950-05-01", amount: "0", mode: "gross", living: true }];
+    renderMembers(); r = last;
+    check($("forms").textContent.indexOf("令和8年12月1日 改正") >= 0, "kaisei note when income 58-62万");
+    check(r.members[1].items[0].amount === 0 && r.members[1].items[1].amount === 75 && $("members").textContent.indexOf("住民税に関する事項") >= 0, "under-16: no 扶養, 同居特別障害者 75");
+    check(r.members[2].items[0].amount === 58, "同居老親等 58");
+    members = [{ rel: "spouse", birth: "1980-01-01", amount: "100", mode: "gross" }]; $("selfGross").value = "1200"; renderMembers();
+    check(last.members[0].items.length === 0 && $("members").textContent.indexOf("1,000万円を超える") >= 0, "self income > 1,000万 -> no spouse deduction");
+    $("selfGross").value = "500"; members = [{ rel: "child", birth: "あ", amount: "", mode: "gross" }]; renderMembers();
+    check($("members").textContent.indexOf("生年月日が読めません") >= 0, "bad birth date");
+    members = [{ rel: "child", birth: "2009-05-01", amount: "125", mode: "gross" }]; renderMembers();
+    check($("forms").textContent.indexOf("令和8年12月1日 改正") >= 0, "gross 125万 child gets kaisei note");
+    members = [{ rel: "spouse", birth: "1980-01-01", amount: "100", mode: "gross" }]; $("selfGross").value = "5,000,000"; renderMembers();
+    check(last.members[0].items[0].amount === 38, "self 5,000,000 read as yen");
+    members = [{ rel: "child", birth: "2009-05-01", amount: "百", mode: "gross" }]; $("selfGross").value = "500"; renderMembers();
+    check($("members").textContent.indexOf("金額が読めません") >= 0 && last.members[0].items.length === 0, "unreadable amount not treated as 0");
+    members = [{ rel: "spouse", birth: "1985-04-01", amount: "100", mode: "gross" }, { rel: "child", birth: "2006-07-01", amount: "150", mode: "gross" }]; renderMembers();
+    var sw = document.documentElement.scrollWidth, iw = window.innerWidth;
+    check(sw <= iw, "width " + sw + "<=" + iw);
+    $("selftest").textContent = (fail ? "SELFTEST FAIL " + fail : "SELFTEST PASS " + log.length) + "\n" + log.join("\n");
+  }
+})();
+</script>
+</body>
+</html>

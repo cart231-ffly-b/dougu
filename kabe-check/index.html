@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>年収の壁チェッカー</title>
+<style>
+:root {
+  --bg: #f7f6f2; --card: #ffffff; --ink: #1f2328; --sub: #5d646d; --line: #e3e1da; --accent: #2557c7;
+  --ok: #1a7f4b; --ok-bg: #e6f4ec; --warn: #9a6200; --warn-bg: #fdf1dc; --bad: #b42318; --bad-bg: #fde8e6;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #15171a; --card: #1e2125; --ink: #e8e6e1; --sub: #a0a6ad; --line: #33373c; --accent: #7ea6ff; --ok: #5cc98d; --ok-bg: #173325; --warn: #f0b44c; --warn-bg: #3a2c12; --bad: #ff7b6e; --bad-bg: #3d1a17; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.7 "Segoe UI", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: 27px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 0 0 8px; }
+.lead { color: var(--sub); margin: 0 0 16px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+.panel > * { min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 8px 0; font-size: 15px; }
+.row label { display: inline-flex; gap: 6px; align-items: center; }
+fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 8px 0; padding: 6px 12px; }
+legend { color: var(--sub); font-size: 13px; padding: 0 4px; }
+input[type=text], select { font: inherit; font-size: 18px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); max-width: 100%; }
+input.num { width: 7em; text-align: right; }
+input:focus-visible, select:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+.small { color: var(--sub); font-size: 13px; }
+.note { border-radius: 10px; padding: 8px 12px; font-size: 15px; margin: 8px 0; }
+.note.ok { background: var(--ok-bg); color: var(--ok); }
+.note.warn { background: var(--warn-bg); color: var(--warn); }
+.note.bad { background: var(--bad-bg); color: var(--bad); }
+.wall { display: grid; grid-template-columns: 6.5em 1fr; gap: 2px 12px; border-bottom: 1px solid var(--line); padding: 8px 0; }
+.wall > * { min-width: 0; }
+.wall .at { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.wall.crossed .at, .wall.crossed .what { color: var(--bad); }
+.wall.next { background: var(--warn-bg); border-radius: 8px; padding: 8px 6px; }
+.wall .what b { display: block; }
+.bar { position: relative; height: 34px; margin: 18px 0 30px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.bar .mark { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--sub); }
+.bar .mark span { position: absolute; top: 38px; left: -2em; width: 4em; text-align: center; font-size: 11px; color: var(--sub); }
+.bar .me { position: absolute; top: 4px; bottom: 4px; left: 0; background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+.tbl { overflow-x: auto; }
+footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
+#selftest { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>年収の壁チェッカー</h1>
+  <p class="lead">パート・アルバイトの<b>令和8年（2026年1〜12月）の給与</b>で、「いくらを越えると何が変わるか」を一度に出します。今年は税の壁が大きく動きました（配偶者・扶養は 123万円→<b>136万円</b>、所得税は 160万円→<b>178万円</b>）。社会保険は 2026年10月から、年収ではなく<b>働く時間</b>で決まるようになりました。ネットにはつながず、入れた数字は外に送りません。</p>
+
+  <section class="panel">
+    <h2>あなたのこと</h2>
+    <div class="row"><label>今年の給与の見込み（年収）<input type="text" class="num" id="gross" inputmode="numeric" value="130"> 万円</label> <span class="small">交通費を除いた、税金を引く前の額（賞与・手当は含める）。1円単位なら「1295000」でも</span></div>
+    <div class="row"><label>交通費（通勤手当）の1年分 <input type="text" class="num" id="commute" inputmode="numeric" placeholder="なければ空"> 万円</label> <span class="small">健康保険の扶養の判定だけに足します（税金の壁には入れません）</span></div>
+    <fieldset><legend>だれの扶養に入っている？</legend><div class="row">
+      <label><input type="radio" name="who" value="spouse" checked> 夫・妻の扶養</label>
+      <label><input type="radio" name="who" value="child"> 親など家族の扶養</label>
+      <label><input type="radio" name="who" value="self"> だれの扶養でもない</label>
+    </div></fieldset>
+    <fieldset><legend>12月31日の年齢</legend><div class="row">
+      <label><input type="radio" name="age" value="other" checked> 16〜18歳・23〜59歳</label>
+      <label><input type="radio" name="age" value="1922"> 19〜22歳</label>
+      <label><input type="radio" name="age" value="u16"> 15歳以下</label>
+      <label><input type="radio" name="age" value="6069"> 60〜69歳（または障害がある）</label>
+      <label><input type="radio" name="age" value="70"> 70歳以上</label>
+    </div></fieldset>
+    <fieldset><legend>勤め先の社会保険（分かれば）</legend><div class="row">
+      <label>週の所定労働時間 <input type="text" class="num" id="hours" inputmode="decimal" placeholder="例 20"> 時間</label>
+      <label>勤め先の人数 <select id="company"><option value="">分からない</option><option value="51">51人以上</option><option value="50">50人以下</option></select></label>
+      <label><input type="checkbox" id="student"> 学生（昼間）</label>
+    </div><p class="small">人数は、厚生年金に入っている人の数です。分からなければ勤め先に聞いてください。</p></fieldset>
+  </section>
+
+  <section class="panel">
+    <h2>結果</h2>
+    <div id="summary"></div>
+    <div class="bar" id="bar" aria-hidden="true"></div>
+    <div id="walls"></div>
+    <div id="family"></div>
+    <div id="ins"></div>
+  </section>
+
+  <section class="panel">
+    <h2>去年（令和7年分）とのちがい</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>壁</th><th>令和7年分（2025年の給与）</th><th>令和8年分（2026年の給与）</th></tr></thead>
+      <tbody>
+        <tr><td>本人の所得税</td><td>160万円</td><td>178万円</td></tr>
+        <tr><td>本人の住民税（単身の目安）</td><td>110万円</td><td>119万円（令和9年度分）</td></tr>
+        <tr><td>配偶者控除（配偶者の年収）</td><td>123万円以下</td><td>136万円以下</td></tr>
+        <tr><td>扶養控除（家族の年収）</td><td>123万円以下</td><td>136万円以下</td></tr>
+        <tr><td>特定親族特別控除（19〜22歳）</td><td>188万円以下</td><td>197万円以下</td></tr>
+        <tr><td>社会保険の加入（勤め先が51人以上）</td><td>週20時間以上かつ月8.8万円以上</td><td>週20時間以上（2026年10月1日に月8.8万円の条件はなくなりました）</td></tr>
+      </tbody>
+    </table></div>
+    <p class="small">令和8年分の所得税の新しい額は、2026年12月の年末調整で反映されます（毎月の給与から引く額が変わるのは2027年1月から）。</p>
+  </section>
+
+  <footer>
+    出典: 国税庁 タックスアンサー No.1199（基礎控除）・No.1410（給与所得控除）・No.1191（配偶者控除）・No.1195（配偶者特別控除）・No.1180（扶養控除）・No.1177（特定親族特別控除）、財務省「令和8年度税制改正の大綱」、総務省「個人住民税の基礎控除等について」（令和8年5月29日）、日本年金機構「2026（令和8）年10月に社会保険の短時間労働者に係る賃金要件が撤廃されました」、厚生労働省通知（令和7年10月1日 保保発1001第3号）。<br>
+    この道具の前提: 給与だけの収入。配偶者の控除額は、夫・妻の所得が900万円以下のとき。住民税は市区町村で違います。手取りの額は計算していません。迷ったら勤め先・税務署・お住まいの市区町村・健康保険の窓口へ。
+  </footer>
+  <pre id="selftest"></pre>
+</main>
+<script>
+// 年収の壁チェッカー（令和8年分・令和9年分の給与。給与だけの収入）。
+// 数字の出典は保管庫 00_Inbox「年収の壁 原典まとめ 2026-10-22」（国税庁 No.1199/1410/1191/1195/1180/1177、
+// 財務省 令和8年度税制改正の大綱、総務省 資料3、日本年金機構、厚労省通知）。README に表で写してある。
+(function (root) {
+  "use strict";
+  var MAN = 10000;
+
+  // 令和8年分・令和9年分の給与所得控除の最低保障額 74万円（収入220万円まで）。
+  // この道具が見る壁はどれも給与収入 207万円以下なので、220万円を超える部分の式は使わない。
+  function salaryIncome(gross) {
+    if (gross > 220 * MAN) return null; // 範囲外（壁はすべて越えている）
+    return Math.max(0, gross - 74 * MAN);
+  }
+
+  // 国税庁 No.1195 令和8年分以降（納税者本人の合計所得 900万円以下の列）。[配偶者の合計所得の上限（以下）, 控除額]
+  var SPOUSE_SPECIAL = [[95, 38], [100, 36], [105, 31], [110, 26], [115, 21], [120, 16], [125, 11], [130, 6], [133, 3]];
+  // 国税庁 No.1177 令和8年分（特定親族の合計所得）。[上限（以下）, 控除額]
+  var TOKUTEI = [[85, 63], [90, 61], [95, 51], [100, 41], [105, 31], [110, 21], [115, 11], [120, 6], [123, 3]];
+
+  function step(table, incomeMan) {
+    for (var i = 0; i < table.length; i++) if (incomeMan <= table[i][0]) return table[i][1];
+    return 0;
+  }
+
+  // 配偶者（給与だけ）の年収 → 本人（夫・妻）が受ける配偶者控除・配偶者特別控除の額（万円）
+  // old70: 配偶者が12月31日に70歳以上（老人控除対象配偶者は48万円。国税庁 No.1191）
+  function spouseDeduction(gross, old70) {
+    var inc = salaryIncome(gross);
+    if (inc == null) return { kind: "なし", amount: 0 };
+    var m = inc / MAN;
+    if (m <= 62) return old70 ? { kind: "配偶者控除（老人控除対象配偶者）", amount: 48 } : { kind: "配偶者控除", amount: 38 };
+    if (m <= 133) return { kind: "配偶者特別控除", amount: step(SPOUSE_SPECIAL, m) };
+    return { kind: "なし", amount: 0 };
+  }
+
+  // 親などに扶養される子・親族（給与だけ）の年収 → 扶養している人が受ける控除（万円）
+  // age: "u16"（15歳以下。扶養控除の対象外）| "other" | "1922"（19歳以上23歳未満）| "6069" | "70"（70歳以上。老人扶養親族 48万円、同居老親等は58万円）
+  function dependentDeduction(gross, age) {
+    var age1922 = age === "1922";
+    var inc = salaryIncome(gross);
+    var m = inc == null ? Infinity : inc / MAN;
+    if (m <= 62) {
+      if (age === "u16") return { kind: "扶養控除の対象外（16歳未満）", amount: 0, none: true };
+      if (age === "70") return { kind: "扶養控除（老人扶養親族。同居の親などは58万円）", amount: 48 };
+      return { kind: age1922 ? "扶養控除（特定扶養親族）" : "扶養控除", amount: age1922 ? 63 : 38 };
+    }
+    if (age1922 && m <= 123) return { kind: "特定親族特別控除", amount: step(TOKUTEI, m) };
+    return { kind: "なし", amount: 0 };
+  }
+
+  // 壁の一覧。who: "spouse"（配偶者の扶養）| "child"（親の扶養）| "self"（だれの扶養でもない）
+  // age: "u16" | "other" | "1922" | "6069" | "70"
+  function walls(p) {
+    var list = [];
+    list.push({ id: "shotoku", at: 178 * MAN, over: "本人に所得税がかかり始める", note: "令和8年分。基礎控除104万円＋給与所得控除74万円。社会保険料を払っていれば、その分だけ上がる", src: "財務省 令和8年度税制改正の大綱・国税庁 No.1199/1410" });
+    list.push({ id: "jumin", at: 119 * MAN, over: "本人に住民税がかかり始める（目安）", note: "令和8年の給与にかかる令和9年度分。単身・1級地の目安で、市区町村の条例で違う。令和7年の給与（令和8年度分）は110万円", src: "総務省 資料3（令和8年5月29日）", approx: true });
+    if (p.who === "spouse") {
+      list.push({ id: "haigu", at: 136 * MAN, over: "夫（妻）の配偶者控除がなくなり、配偶者特別控除に変わる（" + (p.age === "70" ? "48万円から38万円に下がる" : "はじめは同じ38万円") + "）", src: "国税庁 No.1191・No.1195（令和8年分）" });
+      list.push({ id: "haigutoku", at: 207 * MAN, over: "夫（妻）の配偶者特別控除がなくなる", note: "169万円（所得95万円）を超えると、控除の額が38万円から段階的に減る", src: "国税庁 No.1195（令和8年分以降）" });
+    }
+    if (p.who === "child") {
+      if (p.age === "1922") {
+        list.push({ id: "fuyou", at: 136 * MAN, over: "親の扶養控除（特定扶養 63万円）が、特定親族特別控除に変わる", src: "国税庁 No.1180・No.1177" });
+        list.push({ id: "tokutei", at: 159 * MAN, over: "親の特定親族特別控除が 63万円から減り始める", src: "国税庁 No.1177（所得85万円＝給与159万円）" });
+        list.push({ id: "tokutei0", at: 197 * MAN, over: "親の特定親族特別控除がなくなる", src: "国税庁 No.1177" });
+      } else if (p.age !== "u16") {
+        list.push({ id: "fuyou", at: 136 * MAN, over: "家族の扶養控除がなくなる", src: "国税庁 No.1180（令和8年分は合計所得62万円以下）" });
+      }
+    }
+    if (p.who === "spouse" || p.who === "child") {
+      // 社会保険の被扶養者は「未満」。ほかの壁は「以下」
+      var hi = p.age === "6069" || p.age === "70" ? 180 : p.age === "1922" && p.who === "child" ? 150 : 130;
+      // 社会保険の扶養は、交通費（通勤手当）も含めた年収で見る（厚労省通知: 賃金は諸手当及び賞与を含む）
+      list.push({ id: "hifuyo", at: hi * MAN, lessThan: true, withCommute: true, over: "健康保険の扶養から外れ、自分で国民健康保険・国民年金に入る", note: "交通費・手当・賞与も含めた見込みの年収で判定（令和8年4月からは労働契約の賃金で判定）。" + (hi === 150 ? "19〜22歳は150万円（配偶者は除く）。" : hi === 180 ? "60歳以上・障害のある人は180万円。" : "") + "勤め先の社会保険に入る働き方（週20時間以上・51人以上・学生でない）なら、年収に関係なく扶養から外れます", src: "日本年金機構・厚労省通知（令和7年10月1日 保保発1001第3号）" });
+    }
+    list.sort(function (a, b) { return a.at - b.at; });
+    return list;
+  }
+
+  // 年収 gross（円）を入れたときの判定
+  function check(p) {
+    var gross = Math.floor(p.gross);
+    var commute = p.commute > 0 ? Math.floor(p.commute) : 0; // 交通費（通勤手当）の年額。税の壁には入れない（非課税の範囲として扱う）
+    // 社会保険の加入（年収ではなく働き方で決まる）。2026-10-01 に賃金要件（月8.8万円）は撤廃
+    var ins = null;
+    if (p.hours != null && p.company != null) {
+      var join = p.hours >= 20 && !p.student && p.company >= 51;
+      ins = { join: join, reason: p.hours < 20 ? "週の所定労働時間が20時間未満" : p.student ? "学生（昼間の学生は原則入らない）" : p.company < 51 ? "勤め先の人数が50人以下（令和9年10月からは36人以上の企業も対象）" : "週20時間以上・学生でない・勤め先が51人以上" };
+    }
+    var insured = !!(ins && ins.join);
+    var ws = walls(p).map(function (w) {
+      var g = w.withCommute ? gross + commute : gross;
+      // 「以下」の壁は at を超えたら越える。「未満」の壁（被扶養者）は at 以上で越える
+      var crossed = w.lessThan ? g >= w.at : g > w.at;
+      var room = w.lessThan ? w.at - 1 - g : w.at - g; // あと何円まで越えない
+      // 勤め先の社会保険に入る人は、年収に関係なく扶養から外れるので、この壁は当てはまらない
+      return Object.assign({}, w, { crossed: crossed, room: room, judged: g, moot: w.id === "hifuyo" && insured });
+    });
+    var next = ws.filter(function (w) { return !w.crossed && !w.moot; })[0] || null;
+    var dedu = p.who === "spouse" ? spouseDeduction(gross, p.age === "70") : p.who === "child" ? dependentDeduction(gross, p.age) : null;
+    return { gross: gross, income: salaryIncome(gross), walls: ws, next: next, insurance: ins, familyDeduction: dedu };
+  }
+
+  var api = { salaryIncome: salaryIncome, spouseDeduction: spouseDeduction, dependentDeduction: dependentDeduction, walls: walls, check: check, MAN: MAN };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.Kabe = api;
+})(this);
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var K = window.Kabe, M = K.MAN;
+  var $ = function (id) { return document.getElementById(id); };
+  var man = function (yen) { var v = yen / M; return (Math.round(v * 10) / 10).toLocaleString("ja-JP") + "万円"; };
+  var yenS = function (yen) { return yen.toLocaleString("ja-JP") + "円"; };
+  var radio = function (n) { return document.querySelector("input[name=" + n + "]:checked").value; };
+
+  // 「130」「130万」は万円、「1295000」「1,295,000円」は円として読む
+  function readGross(s) {
+    s = String(s || "").normalize("NFKC").replace(/[,\s円]/g, "");
+    var m = s.match(/^(\d+(?:\.\d+)?)万?$/);
+    if (!m) return null;
+    var v = parseFloat(m[1]);
+    return v >= 10000 ? Math.floor(v) : Math.round(v * M);
+  }
+
+  function run() {
+    var gross = readGross($("gross").value);
+    var who = radio("who"), age = radio("age");
+    var hours = parseFloat(String($("hours").value).normalize("NFKC"));
+    var comp = $("company").value;
+    if (gross == null) { $("summary").innerHTML = '<div class="note bad">年収が読めません。「130」（万円）か「1300000」（円）で入れてください。</div>'; $("walls").innerHTML = $("family").innerHTML = $("ins").innerHTML = $("bar").innerHTML = ""; return null; }
+    var commute = readGross($("commute").value) || 0;
+    var r = K.check({ gross: gross, commute: commute, who: who, age: age, hours: isNaN(hours) ? null : hours, company: comp ? +comp : null, student: $("student").checked });
+    var insured = r.insurance && r.insurance.join;
+
+    var crossed = r.walls.filter(function (w) { return w.crossed; });
+    var s = "";
+    if (r.next) s += '<div class="note warn">次の壁は <b>' + man(r.next.at) + (r.next.lessThan ? "（未満）" : "") + "</b>: " + r.next.over + "。あと <b>" + yenS(r.next.room) + "</b> までなら越えません。</div>";
+    else s += '<div class="note ok">この道具で見る壁は、すべて越えています。</div>';
+    if (crossed.length) s += '<div class="note bad">越えている壁: ' + crossed.length + " つ（下の赤い行）。</div>";
+    $("summary").innerHTML = s;
+
+    // 帯グラフ（0〜220万円）
+    var max = 220 * M, bar = '<div class="me" style="width:' + Math.min(100, gross / max * 100) + '%"></div>';
+    r.walls.forEach(function (w) { bar += '<div class="mark" style="left:' + (w.at / max * 100) + '%"><span>' + Math.round(w.at / M) + "</span></div>"; });
+    $("bar").innerHTML = bar;
+
+    $("walls").innerHTML = r.walls.map(function (w) {
+      var cls = "wall" + (w.crossed ? " crossed" : "") + (r.next && r.next.id === w.id ? " next" : "");
+      var muted = w.moot ? '<span class="small">（あなたは勤め先の社会保険に入るので、年収に関係なく扶養から外れます。この壁は当てはまりません）</span>' :
+        w.id === "hifuyo" && commute ? '<span class="small">（交通費を足した ' + man(w.judged) + " で判定）</span>" : "";
+      return '<div class="' + cls + '"><div class="at">' + man(w.at) + (w.lessThan ? "<br><span class=\"small\">未満まで</span>" : "<br><span class=\"small\">まで</span>") + '</div><div class="what"><b>' + (w.crossed ? "越えている: " : "") + w.over + "</b>" + muted + (w.note ? '<span class="small">' + w.note + "</span><br>" : "") + '<span class="small">出典: ' + w.src + "</span></div></div>";
+    }).join("");
+
+    var f = r.familyDeduction, fh = "";
+    if (f) {
+      var who2 = who === "spouse" ? "夫・妻" : "扶養している家族";
+      fh = '<div class="note ' + (f.amount ? "ok" : "warn") + '">' + who2 + "の所得税の控除: <b>" + (f.amount ? f.kind + " " + f.amount + "万円" : "なし") + "</b>（あなたの給与所得 " + (r.income == null ? "220万円超" : man(r.income)) + "）。" + (f.amount && f.amount < (f.kind.indexOf("特定") >= 0 ? 63 : 38) ? "満額より減っています。" : "") + "</div>";
+    }
+    $("family").innerHTML = fh;
+
+    var ih = "";
+    if (r.insurance) ih = '<div class="note ' + (insured ? "warn" : "ok") + '">勤め先の社会保険（健康保険・厚生年金）: <b>' + (insured ? "入る" : "入らない") + "</b>（" + r.insurance.reason + "）。" + (insured ? "年収がいくらでも入ります（2026年10月から月8.8万円の条件はありません）。保険料が引かれる分、手取りは減りますが、将来の年金が増えます。" : "") + "</div>";
+    else ih = '<div class="note warn">週の時間と勤め先の人数を入れると、勤め先の社会保険に入るかも出します。<b>週20時間以上・勤め先が51人以上・学生でない</b>なら、年収が130万円より少なくても勤め先の社会保険に入り、扶養から外れます。</div>';
+    $("ins").innerHTML = ih;
+    return r;
+  }
+
+  document.querySelectorAll("input,select").forEach(function (el) { el.addEventListener(el.type === "text" ? "input" : "change", run); });
+  run();
+
+  if (location.hash === "#selftest") {
+    var log = [], fail = 0;
+    var check = function (ok, msg) { if (!ok) fail++; log.push((ok ? "PASS " : "FAIL ") + msg); };
+    var set = function (g, who, age) { $("gross").value = g; document.querySelector('input[name=who][value="' + who + '"]').checked = true; document.querySelector('input[name=age][value="' + age + '"]').checked = true; return run(); };
+    var r = set("125", "spouse", "other");
+    check(r.next.id === "hifuyo" && $("summary").textContent.indexOf("あと 49,999円") >= 0, "125万 -> next 130万未満, room 49,999");
+    r = set("140", "spouse", "other");
+    check(r.walls.filter(function (w) { return w.crossed; }).length === 3 && $("family").textContent.indexOf("配偶者特別控除 38万円") >= 0, "140万: crossed 119/130/136, spouse special 38");
+    r = set("150", "child", "1922");
+    check(r.next.id === "tokutei" && r.walls.filter(function (w) { return w.id === "hifuyo"; })[0].crossed, "150万 child 19-22: 150 crossed (未満), next 159");
+    check($("family").textContent.indexOf("特定親族特別控除 63万円") >= 0, "parent still gets 63");
+    r = set("1295000", "spouse", "other");
+    check(r.gross === 1295000, "yen input");
+    $("hours").value = "20"; $("company").value = "51"; r = set("90", "spouse", "other");
+    check($("ins").textContent.indexOf("入る") >= 0 && $("walls").textContent.indexOf("この壁は当てはまりません") >= 0, "20h/51+: insured regardless of income");
+    check(r.next === null || r.next.id !== "hifuyo", "insured: 130万 is not shown as next wall");
+    $("hours").value = ""; $("company").value = "";
+    $("commute").value = "10"; r = set("125", "spouse", "other");
+    check(r.walls.filter(function (w) { return w.id === "hifuyo"; })[0].crossed && $("walls").textContent.indexOf("交通費を足した 135万円") >= 0, "commute counted for 130万 only");
+    $("commute").value = "";
+    r = set("100", "spouse", "70");
+    check($("family").textContent.indexOf("48万円") >= 0, "spouse 70+ gets 48");
+    $("gross").value = "あ"; check(run() === null, "unreadable");
+    set("130", "spouse", "other");
+    var sw = document.documentElement.scrollWidth, iw = window.innerWidth;
+    check(sw <= iw, "width " + sw + "<=" + iw);
+    $("selftest").textContent = (fail ? "SELFTEST FAIL " + fail : "SELFTEST PASS " + log.length) + "\n" + log.join("\n");
+  }
+})();
+</script>
+</body>
+</html>
