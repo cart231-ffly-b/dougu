@@ -242,12 +242,15 @@ footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
   // 「500」「500万」は万円、「5000000」「5,000,000円」のように 1万以上の数は円として読む。読めなければ null
+  // 「円」「万」が書いてあればそれに従う（11-05: 年収の壁で「5000円」が 5000万円になっていたのと同じ穴）
   var man = function (s) {
-    s = String(s == null ? "" : s).normalize("NFKC").replace(/[,\s円]/g, "");
-    var m = s.match(/^(\d+(?:\.\d+)?)(万)?$/);
+    s = String(s == null ? "" : s).normalize("NFKC").replace(/[,\s]/g, "");
+    var m = s.match(/^(\d{1,12}(?:\.\d+)?)(万円?|円)?$/);
     if (!m) return null;
     var v = parseFloat(m[1]);
-    return !m[2] && v >= 10000 ? Math.floor(v) : Math.round(v * M);
+    if (m[2] === "円") return Math.floor(v);
+    if (m[2]) return Math.round(v * M);
+    return v >= 10000 ? Math.floor(v) : Math.round(v * M);
   };
   var REL = [["spouse", "配偶者"], ["child", "子"], ["parent", "父母・祖父母"], ["other", "その他の親族"]];
   var members = [{ rel: "spouse", birth: "1985-04-01", amount: "100", mode: "gross" }, { rel: "child", birth: "2006-07-01", amount: "150", mode: "gross" }];
@@ -336,6 +339,11 @@ footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
     check(last.members[0].items[0].amount === 38, "self 5,000,000 read as yen");
     members = [{ rel: "child", birth: "2009-05-01", amount: "百", mode: "gross" }]; $("selfGross").value = "500"; renderMembers();
     check($("members").textContent.indexOf("金額が読めません") >= 0 && last.members[0].items.length === 0, "unreadable amount not treated as 0");
+    // 11-05: 「円」と書いたら円。配偶者の「5000円」が 5000万円になって控除なしと出ていた
+    members = [{ rel: "spouse", birth: "1980-01-01", amount: "5000円", mode: "gross" }]; renderMembers();
+    check(last.members[0].items[0].name === "配偶者控除" && last.members[0].items[0].amount === 38, "spouse 5000円 is yen");
+    members = [{ rel: "spouse", birth: "1980-01-01", amount: "100万円", mode: "gross" }]; renderMembers();
+    check(last.members[0].items[0].amount === 38, "spouse 100万円");
     members = [{ rel: "spouse", birth: "1985-04-01", amount: "100", mode: "gross" }, { rel: "child", birth: "2006-07-01", amount: "150", mode: "gross" }]; renderMembers();
     var sw = document.documentElement.scrollWidth, iw = window.innerWidth;
     check(sw <= iw, "width " + sw + "<=" + iw);
