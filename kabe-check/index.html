@@ -207,7 +207,9 @@ footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
       // 勤め先の社会保険に入る人は、年収に関係なく扶養から外れるので、この壁は当てはまらない
       return Object.assign({}, w, { crossed: crossed, room: room, judged: g, moot: w.id === "hifuyo" && insured });
     });
-    var next = ws.filter(function (w) { return !w.crossed && !w.moot; })[0] || null;
+    // 次の壁は「あと何円で越えるか」が一番小さいもの（11-05 点検: 交通費を足す壁があると額面の順と食い違う）
+    var next = ws.filter(function (w) { return !w.crossed && !w.moot; })
+      .reduce(function (a, w) { return a === null || w.room < a.room ? w : a; }, null);
     var dedu = p.who === "spouse" ? spouseDeduction(gross, p.age === "70") : p.who === "child" ? dependentDeduction(gross, p.age) : null;
     return { gross: gross, income: salaryIncome(gross), walls: ws, next: next, insurance: ins, familyDeduction: dedu };
   }
@@ -227,23 +229,36 @@ footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
   var yenS = function (yen) { return yen.toLocaleString("ja-JP") + "円"; };
   var radio = function (n) { return document.querySelector("input[name=" + n + "]:checked").value; };
 
-  // 「130」「130万」は万円、「1295000」「1,295,000円」は円として読む
+  // 「130」「130万」は万円、「1295000」「1,295,000円」は円として読む。
+  // 「円」「万」が書いてあればそれに従う（11-05 点検: 「5000円」が 5000万円になっていた）
   function readGross(s) {
-    s = String(s || "").normalize("NFKC").replace(/[,\s円]/g, "");
-    var m = s.match(/^(\d+(?:\.\d+)?)万?$/);
+    s = String(s || "").normalize("NFKC").replace(/[,\s]/g, "");
+    var m = s.match(/^(\d+(?:\.\d+)?)(万円?|円)?$/);
     if (!m) return null;
     var v = parseFloat(m[1]);
+    if (m[2] === "円") return Math.floor(v);
+    if (m[2]) return Math.round(v * M);
     return v >= 10000 ? Math.floor(v) : Math.round(v * M);
+  }
+
+  function stop(msg) {
+    $("summary").innerHTML = '<div class="note bad">' + msg + "</div>";
+    $("walls").innerHTML = $("family").innerHTML = $("ins").innerHTML = $("bar").innerHTML = "";
+    return null;
   }
 
   function run() {
     var gross = readGross($("gross").value);
     var who = radio("who"), age = radio("age");
-    var hours = parseFloat(String($("hours").value).normalize("NFKC"));
+    var hoursText = String($("hours").value).normalize("NFKC").trim();
     var comp = $("company").value;
-    if (gross == null) { $("summary").innerHTML = '<div class="note bad">年収が読めません。「130」（万円）か「1300000」（円）で入れてください。</div>'; $("walls").innerHTML = $("family").innerHTML = $("ins").innerHTML = $("bar").innerHTML = ""; return null; }
-    var commute = readGross($("commute").value) || 0;
-    var r = K.check({ gross: gross, commute: commute, who: who, age: age, hours: isNaN(hours) ? null : hours, company: comp ? +comp : null, student: $("student").checked });
+    if (gross == null) return stop("年収が読めません。「130」（万円）か「1300000」（円）で入れてください。");
+    var commuteText = String($("commute").value).trim();
+    var commute = commuteText ? readGross(commuteText) : 0;
+    if (commute == null) return stop("交通費が読めません。「10」（万円）か「100000」（円）で入れてください。空なら交通費なしとして見ます。");
+    if (hoursText && !/^\d+(\.\d+)?$/.test(hoursText)) return stop("週の労働時間が読めません。「20」や「19.5」のように数字で入れてください。");
+    var hours = hoursText ? parseFloat(hoursText) : null;
+    var r = K.check({ gross: gross, commute: commute, who: who, age: age, hours: hours, company: comp ? +comp : null, student: $("student").checked });
     var insured = r.insurance && r.insurance.join;
 
     var crossed = r.walls.filter(function (w) { return w.crossed; });
@@ -305,6 +320,18 @@ footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
     r = set("100", "spouse", "70");
     check($("family").textContent.indexOf("48万円") >= 0, "spouse 70+ gets 48");
     $("gross").value = "あ"; check(run() === null, "unreadable");
+    // 11-05 の点検で見つかった穴
+    $("commute").value = "5000円"; r = set("100", "spouse", "other");
+    check(r && !r.walls.filter(function (w) { return w.id === "hifuyo"; })[0].crossed, "commute 5000円 is yen, not 5000万");
+    $("commute").value = "1O000"; check(set("129", "spouse", "other") === null, "unreadable commute stops");
+    $("commute").value = "15"; r = set("110", "spouse", "other");
+    check(r.next.id === "hifuyo" && r.next.room === 49999, "next wall = smallest room (110+15 commute -> 130万)");
+    $("commute").value = "";
+    r = set("130万円", "spouse", "other"); check(r.gross === 1300000, "130万円");
+    r = set("1,295,000円", "spouse", "other"); check(r.gross === 1295000, "1,295,000円");
+    $("hours").value = "20abc"; check(set("100", "spouse", "other") === null, "unreadable hours stops");
+    $("hours").value = "19.5"; check(set("100", "spouse", "other") !== null, "19.5 hours ok");
+    $("hours").value = "";
     set("130", "spouse", "other");
     var sw = document.documentElement.scrollWidth, iw = window.innerWidth;
     check(sw <= iw, "width " + sw + "<=" + iw);
