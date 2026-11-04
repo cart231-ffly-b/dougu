@@ -262,7 +262,8 @@ footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
     var insured = r.insurance && r.insurance.join;
 
     var crossed = r.walls.filter(function (w) { return w.crossed; });
-    var s = "";
+    // 読んだ金額を先に見せる（11-05 試用係: 「130000」を130万円のつもりで入れた人が、13万円と読まれたことに気づけない）
+    var s = '<div class="small" id="readas">年収 ' + man(gross) + "（" + yenS(gross) + "）" + (commute ? "・交通費 " + man(commute) : "") + " として見ています。</div>";
     if (r.next) s += '<div class="note warn">次の壁は <b>' + man(r.next.at) + (r.next.lessThan ? "（未満）" : "") + "</b>: " + r.next.over + "。あと <b>" + yenS(r.next.room) + "</b> までなら越えません。</div>";
     else s += '<div class="note ok">この道具で見る壁は、すべて越えています。</div>';
     if (crossed.length) s += '<div class="note bad">越えている壁: ' + crossed.length + " つ（下の赤い行）。</div>";
@@ -328,6 +329,7 @@ footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
     check(r.next.id === "hifuyo" && r.next.room === 49999, "next wall = smallest room (110+15 commute -> 130万)");
     $("commute").value = "";
     r = set("130万円", "spouse", "other"); check(r.gross === 1300000, "130万円");
+    set("130000", "spouse", "other"); check($("readas").textContent.indexOf("13万円（130,000円）") >= 0, "shows what was read");
     r = set("1,295,000円", "spouse", "other"); check(r.gross === 1295000, "1,295,000円");
     $("hours").value = "20abc"; check(set("100", "spouse", "other") === null, "unreadable hours stops");
     $("hours").value = "19.5"; check(set("100", "spouse", "other") !== null, "19.5 hours ok");
