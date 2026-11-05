@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ふるさと納税の上限</title>
+<style>
+:root {
+  --bg: #f7f6f2; --card: #ffffff; --ink: #1f2328; --sub: #5d646d; --line: #e3e1da; --accent: #2557c7;
+  --ok: #1a7f4b; --ok-bg: #e6f4ec; --warn: #9a6200; --warn-bg: #fdf1dc; --bad: #b42318; --bad-bg: #fde8e6;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #15171a; --card: #1e2125; --ink: #e8e6e1; --sub: #a0a6ad; --line: #33373c; --accent: #7ea6ff; --ok: #5cc98d; --ok-bg: #173325; --warn: #f0b44c; --warn-bg: #3a2c12; --bad: #ff7b6e; --bad-bg: #3d1a17; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.7 "Segoe UI", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: 27px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 0 0 8px; }
+.lead { color: var(--sub); margin: 0 0 16px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+.panel > * { min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 10px 0; font-size: 15px; }
+.row label { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+input[type=text], select { font: inherit; font-size: 18px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); max-width: 100%; }
+input.num { width: 9em; text-align: right; }
+input:focus-visible, select:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+.small { color: var(--sub); font-size: 13px; }
+.note { border-radius: 10px; padding: 8px 12px; font-size: 15px; margin: 8px 0; }
+.note.ok { background: var(--ok-bg); color: var(--ok); }
+.note.warn { background: var(--warn-bg); color: var(--warn); }
+.note.bad { background: var(--bad-bg); color: var(--bad); }
+.big { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; margin: 6px 0; }
+dt { color: var(--sub); }
+dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+ol li, ul li { margin: 2px 0; }
+footer { margin-top: 28px; color: var(--sub); font-size: 13px; }
+#selftest { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ふるさと納税の上限</h1>
+  <p class="lead">手元の<b>住民税の決定通知書</b>（6月ごろに会社や市区町村から届く紙）の数字から、<b>自己負担が 2,000円で済む寄附額の目安</b>と、今年の残りの枠を出します。年収からのざっくりした表ではなく、総務省の計算式で出します。ネットにはつながず、入れた数字は外に送りません。</p>
+
+  <section class="panel">
+    <h2>1. 数字を入れる</h2>
+    <div class="row"><label>住民税の<b>所得割額</b>（市区町村民税と道府県民税の合計）<input type="text" class="num" id="wari" inputmode="numeric" placeholder="例 200000"> 円</label></div>
+    <p class="small">決定通知書の「税額」の欄にある「所得割額」の、市区町村民税と道府県民税（都民税）の2つを足した額です。「均等割額」は入れません。</p>
+    <div class="row"><label>去年のふるさと納税で住民税から引かれた額（<b>寄附金税額控除</b>） <input type="text" class="num" id="kifu" inputmode="numeric" placeholder="なければ空"> 円</label></div>
+    <p class="small"><b>去年もふるさと納税をした人は必ず入れてください。</b>多くの決定通知書では「所得割額」が、去年の寄附の控除を引いた<b>あと</b>の額になっています。上限は引く<b>前</b>の所得割額で決まるので、ここに入れた額を足して計算します。額は決定通知書の「税額控除」や「摘要」の欄の「寄附金（税額）控除」にあります（様式は市区町村で違います）。住宅ローン控除の額は足しません。</p>
+    <div class="row"><label>所得税の税率 <select id="rate">
+      <option value="auto">課税所得から決める</option>
+      <option value="0">0%（所得税がかからない）</option><option value="0.05">5%</option><option value="0.10">10%</option><option value="0.20">20%</option><option value="0.23">23%</option><option value="0.33">33%</option><option value="0.40">40%</option><option value="0.45">45%</option>
+    </select></label>
+      <label id="taxableBox">課税所得 <input type="text" class="num" id="taxable" inputmode="numeric" placeholder="例 2500000"> 円</label></div>
+    <p class="small">課税所得は、源泉徴収票の「給与所得控除後の金額」から「所得控除の額の合計額」を引いた額です。分からなければ、年収 400万円くらいまでの人は多くが 5%か10% です。</p>
+    <div class="row"><label>今年もう寄附した額 <input type="text" class="num" id="done" inputmode="numeric" placeholder="なければ空"> 円</label></div>
+  </section>
+
+  <section class="panel">
+    <h2>2. 結果</h2>
+    <div id="out"><p class="small">所得割額を入れると、ここに出ます。</p></div>
+  </section>
+
+  <section class="panel">
+    <h2>気をつけること</h2>
+    <ul>
+      <li><b>決定通知書の額は去年の収入のもの</b>です。今年（2026年）の寄附で減るのは、今年の収入にかかる来年度の住民税です。<b>今年の収入が去年より減るなら、上限も下がります。</b>目安より少し控えめに寄附すると安心です。</li>
+      <li>給与収入が <b>220万円以下</b>の人は、今年の改正で住民税の給与所得控除の最低保障額が増えるため（令和9年度分から 65万→74万円）、収入が同じでも所得割が最大 9,000円ほど下がり、上限も少し下がります。それより収入が多い人の給与所得控除は変わりません。</li>
+      <li>住宅ローン控除・医療費控除などを使う人は、所得割や税率が変わるので、上限も変わります。お住まいの市区町村に確かめてください。</li>
+      <li>確定申告をしない会社員で、寄附先が<b>5団体以内</b>なら「ワンストップ特例」の申請で確定申告が要りません（総務省）。その場合、所得税の分も住民税から引かれますが、合計は同じです。</li>
+    </ul>
+  </section>
+
+  <footer>計算式の出典: 総務省 ふるさと納税ポータル「税金の控除について」（(1) 所得税 ＝（寄附−2,000円）×所得税率、(2) 住民税 基本分 ＝（寄附−2,000円）×10%、(3) 住民税 特例分 ＝（寄附−2,000円）×（90%−所得税率）で住民税所得割額の2割が上限）。所得税率は国税庁 No.2260。所得税率には復興特別所得税を含めて ×1.021 しています（令和9年以後も合計税率は同じ）。特例分で使う税率は、正しくは住民税の課税所得から人的控除差調整額を引いた額で決まるため、税率の境目の近くの人は1段下の税率でも確かめてください。</footer>
+  <pre id="selftest"></pre>
+</main>
+<script>
+// ふるさと納税の上限の目安（自己負担が 2,000円で済む寄附額）。
+// 式の出典: 総務省 ふるさと納税ポータル「税金の控除について」
+//   (1) 所得税 = (寄附 − 2,000) × 所得税率（復興特別所得税を含め ×1.021）
+//   (2) 住民税 基本分 = (寄附 − 2,000) × 10%
+//   (3) 住民税 特例分 = (寄附 − 2,000) × (100% − 10% − 所得税率×1.021)。ただし住民税所得割額の 20% が上限
+// 税率の出典: 国税庁 No.2260（課税される所得金額 195万円未満 5% … 4,000万円以上 45%）。
+// 令和9年以後も、防衛特別所得税と復興特別所得税の合計税率は変わらない（同 No.2260 ※3）ので ×1.021 のまま。
+(function (root) {
+  "use strict";
+
+  // [課税所得の上限（未満）, 税率]。国税庁 No.2260: 1,949,000円まで 5% … 40,000,000円以上 45%
+  var BRACKETS = [[1950000, 0.05], [3300000, 0.10], [6950000, 0.20], [9000000, 0.23], [18000000, 0.33], [40000000, 0.40], [Infinity, 0.45]];
+
+  function rateOf(taxable) {
+    // 課税所得が 1,000円未満なら所得税はかからない（税率 0%。特例分は 90%）
+    if (!(taxable >= 1000)) return 0;
+    for (var i = 0; i < BRACKETS.length; i++) if (taxable < BRACKETS[i][0]) return BRACKETS[i][1];
+    return 0.45;
+  }
+
+  // 特例分の割合（100% − 10% − 所得税率×1.021）
+  function specialRatio(rate) { return 0.9 - rate * 1.021; }
+
+  // 上限: 特例分がちょうど所得割の20%になる寄附額。1円未満は切り捨て（超えないほうに丸める）
+  function limit(shotokuwari, rate) {
+    if (!(shotokuwari > 0)) return null;
+    return Math.floor((shotokuwari * 0.2) / specialRatio(rate)) + 2000;
+  }
+
+  // 寄附額 d のときの内訳（1円未満は切り捨てて見せる。実際の税額計算の端数処理は市区町村・税務署による）
+  function breakdown(d, shotokuwari, rate) {
+    var base = Math.max(0, d - 2000);
+    var it = base * rate * 1.021;
+    var kihon = base * 0.1;
+    var tokureiFull = base * specialRatio(rate);
+    var cap = shotokuwari * 0.2;
+    var tokurei = Math.min(tokureiFull, cap);
+    var parts = [Math.floor(it), Math.floor(kihon), Math.floor(tokurei)];
+    // 自己負担は「寄附額 − 見せている3つの合計」で出し、画面の足し算が1円も狂わないようにする
+    return {
+      donation: d, incomeTax: parts[0], basic: parts[1], special: parts[2],
+      capped: tokureiFull > cap, selfPay: d - parts[0] - parts[1] - parts[2], overBy: Math.max(0, tokureiFull - cap)
+    };
+  }
+
+  var api = { BRACKETS: BRACKETS, rateOf: rateOf, specialRatio: specialRatio, limit: limit, breakdown: breakdown };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.Furusato = api;
+})(this);
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var F = window.Furusato;
+  var $ = function (id) { return document.getElementById(id); };
+  var yen = function (n) { return Math.floor(n).toLocaleString("ja-JP") + "円"; };
+  var num = function (s) { s = String(s == null ? "" : s).normalize("NFKC").replace(/[,\s円]/g, ""); var m = s.match(/^(\d{1,12}(?:\.\d+)?)(万)?$/); return m ? Math.round(parseFloat(m[1]) * (m[2] ? 10000 : 1)) : null; };
+  var pct = function (r) { return Math.round(r * 100) + "%"; };
+
+  // 空なら 0、書いてあって読めなければ null（11-05 点検: マイナスや「あ」入りが黙って0になっていた）
+  var opt = function (id) { var v = String($(id).value).trim(); return v ? num(v) : 0; };
+  var bad = function (what) { $("out").innerHTML = '<div class="note bad">' + what + "が読めません。数字だけで入れてください（例 200000、20万）。空ならなしとして見ます。</div>"; return null; };
+
+  function run() {
+    var wariText = String($("wari").value).trim();
+    var wariShown = num(wariText);
+    if (wariText && wariShown == null) return bad("所得割額");
+    var kifu = opt("kifu");
+    if (kifu == null) return bad("寄附金税額控除（去年の分）");
+    // 上限の 20% を掛ける元は、寄附金税額控除を引く前の所得割額
+    var wari = wariShown == null ? null : wariShown + kifu;
+    var auto = $("rate").value === "auto";
+    $("taxableBox").hidden = !auto;
+    var taxableText = String($("taxable").value).trim();
+    var taxable = num(taxableText);
+    if (auto && taxableText && taxable == null) return bad("課税所得");
+    var out = $("out");
+    // 11-05 試用: 去年の控除だけ先に入れて「なんで出ない？」で詰まる人がいた
+    if (wari == null || wari <= 0) { out.innerHTML = '<p class="small">所得割額を入れると、ここに出ます。' + (kifu > 0 ? "寄附金税額控除（" + yen(kifu) + "）は、所得割額に足して使います。先に通知書の「所得割額」を入れてください。" : "") + "</p>"; return null; }
+    if (auto && taxable == null) { out.innerHTML = '<div class="note warn">課税所得を入れるか、税率を選んでください。</div>'; return null; }
+    var rate = auto ? F.rateOf(taxable) : parseFloat($("rate").value);
+    var L = F.limit(wari, rate);
+    var b = F.breakdown(L, wari, rate);
+    // 11-05 試用: 桁違い（20000 と 200000）に気づけるよう、読んだ値を先に見せる
+    var h = '<div class="small" id="readas">所得割額 ' + yen(wariShown) + "・寄附金税額控除 " + yen(kifu) + (auto ? "・課税所得 " + yen(taxable) : "") + " として読みました。</div>" +
+      '<p>自己負担 2,000円で済む寄附額の目安（今年1年の合計）</p><div class="big">' + yen(L) + "</div>" +
+      '<p class="small">所得割 ' + yen(wari) + (kifu ? "（通知書の " + yen(wariShown) + " ＋ 寄附金税額控除 " + yen(kifu) + "）" : "") + "・所得税率 " + pct(rate) + " で計算</p>" +
+      "<dl><dt>所得税から（今年の分が戻る）</dt><dd>" + yen(b.incomeTax) + "</dd><dt>住民税から（基本分）</dt><dd>" + yen(b.basic) + "</dd><dt>住民税から（特例分）</dt><dd>" + yen(b.special) + "</dd><dt>自己負担</dt><dd>" + yen(b.selfPay) + "</dd></dl>";
+    // 税率の境目の近くなら、1段下の税率でも出す
+    var lower = F.BRACKETS.map(function (x) { return x[1]; }).filter(function (r) { return r < rate; }).pop();
+    if (lower != null) h += '<p class="small">税率が1段下（' + pct(lower) + "）なら、目安は " + yen(F.limit(wari, lower)) + "。境目の近くの人はこちらを上限と考えると安全です。</p>";
+    var done = opt("done");
+    if (done == null) return bad("今年もう寄附した額");
+    if (done > 0) {
+      if (done <= L) h += '<div class="note ok">今年の残りの枠: あと <b>' + yen(L - done) + "</b></div>";
+      else {
+        var bo = F.breakdown(done, wari, rate);
+        h += '<div class="note bad">目安を <b>' + yen(done - L) + "</b> 超えています。自己負担は 2,000円ではなく、およそ <b>" + yen(Math.round(bo.selfPay)) + "</b> になります。</div>";
+      }
+    }
+    out.innerHTML = h;
+    return { limit: L, rate: rate, b: b };
+  }
+  ["wari", "kifu", "taxable", "done"].forEach(function (id) { $(id).oninput = run; });
+  $("rate").onchange = run;
+  run();
+
+  if (location.hash === "#selftest") {
+    var log = [], fail = 0;
+    var check = function (ok, msg) { if (!ok) fail++; log.push((ok ? "PASS " : "FAIL ") + msg); };
+    $("wari").value = "200,000"; $("rate").value = "auto"; $("taxable").value = "2500000"; var r = run();
+    check(r.rate === 0.10 && r.limit === 52131 && $("out").textContent.indexOf("52,131円") >= 0, "200,000 / 2.5M taxable -> 10% -> 52,131");
+    check($("out").textContent.indexOf("1段下（5%）") >= 0, "shows lower-bracket limit");
+    $("done").value = "30000"; run();
+    check($("out").textContent.indexOf("あと 22,131円") >= 0, "remaining 22,131");
+    $("done").value = "80000"; run();
+    check($("out").textContent.indexOf("超えています") >= 0, "over-limit warning");
+    $("done").value = ""; $("wari").value = "20万"; $("rate").value = "0.20"; r = run();
+    check(r.rate === 0.20 && r.limit > 52131, "manual 20% and 万 input");
+    $("rate").value = "auto"; $("wari").value = "160000"; $("kifu").value = "40000"; r = run();
+    check(r.limit === 52131 && $("out").textContent.indexOf("寄附金税額控除 40,000円") >= 0, "adds back last year's donation credit");
+    var d = r.b; check(d.incomeTax + d.basic + d.special + d.selfPay === r.limit, "breakdown sums exactly");
+    $("kifu").value = ""; $("taxable").value = "0"; $("wari").value = "30000"; r = run();
+    check(r.rate === 0, "taxable 0 -> rate 0%");
+    $("taxable").value = "2500000";
+    $("wari").value = ""; check(run() === null, "empty input");
+    $("kifu").value = "50000"; run(); check($("out").textContent.indexOf("先に通知書の「所得割額」") >= 0, "kifu without wari gets a hint");
+    $("kifu").value = ""; $("wari").value = "２０，０００"; run(); check($("readas").textContent.indexOf("所得割額 20,000円") >= 0 && $("readas").textContent.indexOf("課税所得 2,500,000円") >= 0, "readas shows what was read");
+    $("wari").value = "";
+    // 11-05 の点検で見つかった穴: 読めない値を黙って0にしない、桁あふれを通さない
+    $("wari").value = "200000"; $("done").value = "-80000"; check(run() === null && $("out").textContent.indexOf("読めません") >= 0, "negative done stops");
+    $("done").value = "８００００あ"; check(run() === null, "garbage done stops");
+    $("done").value = ""; $("kifu").value = "40000あ"; check(run() === null, "garbage kifu stops");
+    $("kifu").value = ""; $("wari").value = "-200000"; check(run() === null && $("out").textContent.indexOf("所得割額が読めません") >= 0, "negative wari says unreadable");
+    $("wari").value = new Array(401).join("9"); check(run() === null, "400 digits rejected");
+    $("wari").value = "200000"; $("taxable").value = "250万あ"; check(run() === null, "garbage taxable stops");
+    $("taxable").value = "2500000";
+    $("wari").value = "200000"; $("rate").value = "auto"; run();
+    var sw = document.documentElement.scrollWidth, iw = window.innerWidth;
+    check(sw <= iw, "width " + sw + "<=" + iw);
+    $("selftest").textContent = (fail ? "SELFTEST FAIL " + fail : "SELFTEST PASS " + log.length) + "\n" + log.join("\n");
+  }
+})();
+</script>
+</body>
+</html>
